@@ -1,0 +1,90 @@
+const CACHE_NAME = 'qaqc-panel-v2';
+const STATIC_RESOURCES = [
+  './',
+  './Index.html',
+  './manifest.json',
+  'https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js'
+];
+
+// Instalación: Guardar recursos de manera individual
+self.addEventListener('install', event => {
+  console.log('📦 Service Worker: Instalando...');
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(async cache => {
+      console.log('✅ Cacheando recursos críticos');
+      for (const resource of STATIC_RESOURCES) {
+        try {
+          await cache.add(resource);
+        } catch (err) {
+          console.warn(`⚠️ No se pudo pre-cachear: ${resource}`, err);
+        }
+      }
+    }).then(() => self.skipWaiting())
+  );
+});
+
+// Activación: Limpieza de cachés antiguas
+self.addEventListener('activate', event => {
+  console.log('🚀 Service Worker: Activando...');
+  event.waitUntil(
+    caches.keys().then(keys => {
+      return Promise.all(
+        keys.map(key => {
+          if (key !== CACHE_NAME) {
+            console.log('🗑️ Eliminando caché antiguo:', key);
+            return caches.delete(key);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Estrategia Fetch: Cache First, luego Network Fallback
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Solicitudes a Google Script / APIs: Intentar red, pero no bloquear si falla
+  if (url.hostname.includes('script.google.com') || url.hostname.includes('googleapis.com')) {
+    event.respondWith(
+      fetch(request).catch(() => {
+        return new Response(
+          JSON.stringify({ error: 'offline', message: 'Sin conexión a internet' }),
+          { headers: { 'Content-Type': 'application/json' } }
+        );
+      })
+    );
+    return;
+  }
+
+  // Recursos estáticos: Servir desde caché inmediatamente
+  if (request.method === 'GET') {
+    event.respondWith(
+      caches.match(request).then(cachedResponse => {
+        if (cachedResponse) {
+          // Intentar actualizar caché en segundo plano
+          fetch(request).then(networkResponse => {
+            if (networkResponse && networkResponse.status === 200) {
+              caches.open(CACHE_NAME).then(cache => cache.put(request, networkResponse));
+            }
+          }).catch(() => {});
+          return cachedResponse;
+        }
+
+        return fetch(request).then(networkResponse => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone));
+          }
+          return networkResponse;
+        }).catch(() => {
+          return caches.match('./Index.html');
+        });
+      })
+    );
+  }
+});

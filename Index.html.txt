@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Panel de Control QAQC - Revisiones y Errores en Terreno">
+    <meta name="theme-color" content="#667eea">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23667eea' width='192' height='192'/><text x='50%' y='50%' font-size='100' fill='white' text-anchor='middle' dy='.3em' font-weight='bold'>QA</text></svg>">
+    
+    <title>Panel de Control - Calidad e Inspecciones</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh; 
+            padding: 20px; 
+        }
+        
+        .container-main { 
+            background: white; 
+            border-radius: 15px; 
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3); 
+            overflow: hidden; 
+            max-width: 1400px; 
+            margin: 0 auto; 
+        }
+        
+        .header { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+            padding: 20px 30px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .header h1 { 
+            margin: 0; 
+            font-size: 28px; 
+            font-weight: 700; 
+        }
+        
+        .header-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            font-size: 13px;
+            font-weight: 600;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.online {
+            background: #4caf50;
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.6);
+        }
+        
+        .status-dot.offline {
+            background: #ff9800;
+            animation: pulse-warn 2s infinite;
+        }
+        
+        .status-dot.syncing {
+            background: #2196f3;
+            animation: pulse-sync 1s infinite;
+        }
+        
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes pulse-warn { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        @keyframes pulse-sync { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.2); opacity: 0.7; } }
+        
+        .last-sync { font-size: 11px; opacity: 0.8; }
+        
+        .nav-tabs { border-bottom: 2px solid #e9ecef; padding: 0 20px; background: #f8f9fa; }
+        .nav-link { color: #666; font-weight: 600; border: none; padding: 15px 25px; transition: all 0.3s ease; }
+        .nav-link:hover { color: #667eea; border-bottom: 3px solid #667eea; }
+        .nav-link.active { color: white; background: #667eea; border-radius: 10px 10px 0 0; margin: 0 5px; }
+        .tab-content { padding: 30px; }
+        
+        .kpi-card { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; padding: 25px; border-radius: 10px; text-align: center; 
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3); transition: transform 0.3s ease; height: 100%; 
+        }
+        .kpi-card:hover { transform: translateY(-5px); }
+        .kpi-value { font-size: 36px; font-weight: 700; margin: 10px 0; }
+        .kpi-label { font-size: 14px; opacity: 0.9; }
+        
+        .chart-container { position: relative; height: 350px; margin: 20px 0; background: white; padding: 20px; border-radius: 10px; border: 1px solid #e9ecef; }
+        .form-control, .form-select { border: 2px solid #e9ecef; border-radius: 8px; padding: 10px 15px; transition: border-color 0.3s ease; }
+        .form-control:focus, .form-select:focus { border-color: #667eea; box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25); }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; padding: 10px 25px; border-radius: 8px; font-weight: 600; transition: transform 0.3s ease; }
+        .btn-primary:hover { transform: scale(1.05); }
+        
+        .alert-danger { background: #ffe6e6; border: 2px solid #ff4444; color: #cc0000; border-radius: 8px; padding: 15px; margin: 15px 0; }
+        .alert-warning { background: #fff3cd; border: 2px solid #ffc107; color: #856404; border-radius: 8px; padding: 15px; margin: 15px 0; }
+        .alert-info-sync { background: #e3f2fd; border-left: 4px solid #2196f3; color: #1565c0; border-radius: 8px; padding: 15px; margin: 15px 0; display: flex; align-items: center; gap: 10px; }
+        
+        .table { border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+        .table th { background: #667eea; color: white; padding: 15px; text-align: left; font-weight: 600; }
+        .table td { padding: 12px 15px; border-bottom: 1px solid #e9ecef; }
+        .table tbody tr:hover { background: #f8f9ff; }
+        .badge-alert { background: #ff4444; color: white; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        
+        .project-card { border-radius: 10px; overflow: hidden; transition: transform 0.2s ease; border: 1px solid #e9ecef; }
+        .project-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+        .project-card .card-header { background: #667eea; font-weight: 600; padding: 15px; }
+        .project-stat h4 { margin-bottom: 2px; font-weight: 700; }
+        .project-stat small { font-size: 11px; color: #666; font-weight: 600; text-transform: uppercase; }
+        .border-right-light { border-right: 1px solid #f0f0f0; }
+        .offline-badge { display: inline-block; background: #ff9800; color: white; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-left: 10px; }
+        
+        @media (max-width: 768px) {
+            .header { flex-direction: column; align-items: flex-start; }
+            .header-info { width: 100%; justify-content: space-between; }
+            .nav-link { padding: 12px 15px; font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-main">
+        <!-- HEADER CON INDICADOR DE ESTADO -->
+        <div class="header">
+            <div>
+                <h1><i class="fas fa-chart-line"></i> Panel de Control QAQC</h1>
+                <p style="margin: 5px 0 0 0; opacity: 0.9;">Departamento de Calidad - Revisiones y Errores</p>
+            </div>
+            
+            <div class="header-info">
+                <div class="status-indicator">
+                    <div class="status-dot online" id="status-dot"></div>
+                    <div>
+                        <div id="status-text">Conectado</div>
+                        <div class="last-sync" id="last-sync-time">Sincronizando...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ALERTA DE SINCRONIZACIÓN OFFLINE -->
+        <div id="offline-alert" style="display: none; margin: 0; border-radius: 0;">
+            <div class="alert-info-sync">
+                <i class="fas fa-wifi"></i>
+                <span>Modo Offline - Mostrando últimos datos descargados</span>
+            </div>
+        </div>
+
+        <!-- TABS -->
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active" id="tab1-btn" data-bs-toggle="tab" data-bs-target="#tab1" type="button"><i class="fas fa-chart-bar"></i> Resumen Revisiones</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab2-btn" data-bs-toggle="tab" data-bs-target="#tab2" type="button"><i class="fas fa-search"></i> Búsqueda Inteligente</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab3-btn" data-bs-toggle="tab" data-bs-target="#tab3" type="button"><i class="fas fa-exclamation-triangle"></i> Pendientes (Rechazados)</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="tab4-btn" data-bs-toggle="tab" data-bs-target="#tab4" type="button"><i class="fas fa-bug"></i> Errores en Terreno</button></li>
+        </ul>
+
+        <!-- CONTENT -->
+        <div class="tab-content">
+            <!-- TAB 1: RESUMEN REVISIONES -->
+            <div class="tab-pane fade show active" id="tab1">
+                <h3 class="mb-4">Resumen General de Revisiones</h3>
+                <div class="row mb-4" id="kpis-container">
+                    <div class="col-md-3">
+                        <div class="kpi-card">
+                            <i class="fas fa-cogs" style="font-size: 32px;"></i>
+                            <div class="kpi-value" id="kpi-piezas">0</div>
+                            <div class="kpi-label">Total Piezas Revisadas</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="kpi-card">
+                            <i class="fas fa-check-circle" style="font-size: 32px; color: #a8e6cf;"></i>
+                            <div class="kpi-value" id="kpi-aprobadas">0</div>
+                            <div class="kpi-label">Aprobadas</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="kpi-card">
+                            <i class="fas fa-times-circle" style="font-size: 32px; color: #ffb3ba;"></i>
+                            <div class="kpi-value" id="kpi-rechazadas">0</div>
+                            <div class="kpi-label">Rechazadas</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="kpi-card">
+                            <i class="fas fa-folder-open" style="font-size: 32px;"></i>
+                            <div class="kpi-value" id="kpi-proyectos">0</div>
+                            <div class="kpi-label">Proyectos Registrados</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6"><div class="chart-container"><canvas id="chart-piezas-proyecto"></canvas></div></div>
+                    <div class="col-md-6"><div class="chart-container"><canvas id="chart-estado-general"></canvas></div></div>
+                </div>
+                
+                <div id="proyecto-details"></div>
+            </div>
+
+            <!-- TAB 2: BÚSQUEDA INTELIGENTE -->
+            <div class="tab-pane fade" id="tab2">
+                <h3 class="mb-4">Búsqueda Inteligente</h3>
+                <div class="card p-4 mb-4 border-0 shadow-sm">
+                    <h5 class="mb-3">Filtros de Búsqueda</h5>
+                    <div class="row g-3">
+                        <div class="col-md-2"><label class="form-label fw-bold">Fecha</label><input type="date" id="filter-fecha" class="form-control"></div>
+                        <div class="col-md-2"><label class="form-label fw-bold">Proyecto</label><input type="text" id="filter-proyecto-busqueda" class="form-control" placeholder="Buscar..."></div>
+                        <div class="col-md-2"><label class="form-label fw-bold">Marca</label><input type="text" id="filter-marca" class="form-control" placeholder="Buscar..."></div>
+                        <div class="col-md-2"><label class="form-label fw-bold">Área</label><input type="text" id="filter-area" class="form-control" placeholder="Buscar..."></div>
+                        <div class="col-md-2"><label class="form-label fw-bold">Inspector</label><input type="text" id="filter-inspector" class="form-control" placeholder="Buscar..."></div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">Estado</label>
+                            <select id="filter-estado" class="form-select">
+                                <option value="">Todos</option>
+                                <option value="aprobado">Aprobado</option>
+                                <option value="rechazado">Rechazado</option>
+                                <option value="avance aprobado">Avance Aprobado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary mt-3" onclick="aplicarFiltrosBusqueda()"><i class="fas fa-search"></i> Buscar</button>
+                </div>
+                <div id="busqueda-resultados"></div>
+            </div>
+
+            <!-- TAB 3: PENDIENTES -->
+            <div class="tab-pane fade" id="tab3">
+                <h3 class="mb-4">Seguimiento de Pendientes</h3>
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="kpi-card">
+                            <i class="fas fa-times-circle" style="font-size: 32px; color: #ffb3ba;"></i>
+                            <div class="kpi-value" id="kpi-pendientes-rechazados">0</div>
+                            <div class="kpi-label">Rechazados Pendientes</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="kpi-card">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 32px; color: #ffd700;"></i>
+                            <div class="kpi-value" id="kpi-pendientes-avances">0</div>
+                            <div class="kpi-label">Avances Aprobados Pendientes</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="pendientes-rechazados-container"></div>
+                <div id="pendientes-avances-container"></div>
+            </div>
+
+            <!-- TAB 4: ERRORES -->
+            <div class="tab-pane fade" id="tab4">
+                <h3 class="mb-4">Errores en Terreno</h3>
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="kpi-card">
+                            <i class="fas fa-exclamation-circle" style="font-size: 32px;"></i>
+                            <div class="kpi-value" id="kpi-area-top">-</div>
+                            <div class="kpi-label">Área con más errores</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="kpi-card">
+                            <i class="fas fa-tools" style="font-size: 32px; color: #a8e6cf;"></i>
+                            <div class="kpi-value" id="kpi-pct-reparados">0%</div>
+                            <div class="kpi-label">Reparados</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="kpi-card">
+                            <i class="fas fa-hourglass-half" style="font-size: 32px; color: #ffb3ba;"></i>
+                            <div class="kpi-value" id="kpi-pct-por-reparar">0%</div>
+                            <div class="kpi-label">Por Reparar</div>
+                        </div>
+                    </div>
+                </div>
+                <div id="errores-tabla"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ==================== VARIABLES GLOBALES ====================
+        let datosRevisiones = [];
+        let datosErrores = [];
+        let isOnline = navigator.onLine;
+        let lastSyncTime = null;
+
+        // ==================== INICIALIZACIÓN OFFLINE-FIRST ====================
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('📱 Iniciando Panel QAQC (Offline-First en GitHub)...');
+            
+            // 1. Registrar Service Worker
+            registrarServiceWorker();
+            
+            // 2. Escuchar cambios de red
+            window.addEventListener('online', handleOnline);
+            window.addEventListener('offline', handleOffline);
+            
+            // 3. Cargar inmediatamente datos locales almacenados
+            await cargarDatosDesdeStorageLocal();
+            
+            // 4. Intentar sincronizar datos frescos desde la red
+            if (navigator.onLine) {
+                sincronizarEnSegundoPlano();
+            } else {
+                handleOffline();
+            }
+
+            // Sincronización periódica cada 15 min
+            setInterval(() => {
+                if (navigator.onLine) sincronizarEnSegundoPlano();
+            }, 15 * 60 * 1000);
+        });
+
+        // ==================== SERVICE WORKER ====================
+        function registrarServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('✅ Service Worker activo', reg))
+                    .catch(err => console.warn('⚠️ No se pudo registrar SW:', err));
+            }
+        }
+
+        // ==================== MANEJO DE CONEXIÓN ====================
+        function handleOnline() {
+            isOnline = true;
+            document.getElementById('offline-alert').style.display = 'none';
+            sincronizarEnSegundoPlano();
+        }
+
+        function handleOffline() {
+            isOnline = false;
+            updateStatusIndicator('offline');
+            document.getElementById('offline-alert').style.display = 'block';
+        }
+
+        function updateStatusIndicator(estado) {
+            const dot = document.getElementById('status-dot');
+            const text = document.getElementById('status-text');
+            const syncTime = document.getElementById('last-sync-time');
+            
+            if (estado === 'offline' || !isOnline) {
+                dot.className = 'status-dot offline';
+                text.textContent = 'Modo Offline';
+                syncTime.textContent = '⚠️ Usando última actualización guardada';
+            } else if (estado === 'syncing') {
+                dot.className = 'status-dot syncing';
+                text.textContent = 'Actualizando...';
+            } else {
+                dot.className = 'status-dot online';
+                text.textContent = 'Conectado';
+                syncTime.textContent = lastSyncTime ? `Actualizado: ${lastSyncTime}` : 'Sincronizado';
+            }
+        }
+
+        // ==================== ALMACENAMIENTO LOCAL (IndexedDB) ====================
+        async function cargarDatosDesdeStorageLocal() {
+            try {
+                const [revs, errs] = await Promise.all([
+                    cargarDelAlmacenamiento('revisiones'),
+                    cargarDelAlmacenamiento('errores')
+                ]);
+
+                datosRevisiones = revs || [];
+                datosErrores = errs || [];
+
+                console.log(`📂 Datos locales: ${datosRevisiones.length} revisiones, ${datosErrores.length} errores`);
+                procesarDatos(); 
+            } catch (e) {
+                console.error("Error al leer IndexedDB local:", e);
+            }
+        }
+
+        function guardarEnAlmacenamiento(clave, datos) {
+            return new Promise((resolve) => {
+                if (!('indexedDB' in window)) return resolve();
+                const request = indexedDB.open('QAQCPanel', 1);
+                
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('datos')) db.createObjectStore('datos');
+                };
+                
+                request.onsuccess = () => {
+                    const db = request.result;
+                    const tx = db.transaction('datos', 'readwrite');
+                    tx.objectStore('datos').put({ clave, datos, timestamp: Date.now() }, clave);
+                    tx.oncomplete = () => resolve();
+                };
+                
+                request.onerror = () => resolve();
+            });
+        }
+
+        function cargarDelAlmacenamiento(clave) {
+            return new Promise((resolve) => {
+                if (!('indexedDB' in window)) return resolve(null);
+                const request = indexedDB.open('QAQCPanel', 1);
+                
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('datos')) db.createObjectStore('datos');
+                };
+                
+                request.onsuccess = () => {
+                    const db = request.result;
+                    const tx = db.transaction('datos', 'readonly');
+                    const getReq = tx.objectStore('datos').get(clave);
+                    getReq.onsuccess = () => resolve(getReq.result ? getReq.result.datos : null);
+                    getReq.onerror = () => resolve(null);
+                };
+                
+                request.onerror = () => resolve(null);
+            });
+        }
+
+        // ==================== SINCRONIZACIÓN RED (GITHUB PAGES) ====================
+        function sincronizarEnSegundoPlano() {
+            // ⚠️ IMPORTANTE: REEMPLAZA LA SIGUIENTE LÍNEA POR TU URL TERMINADA EN /exec
+            // (La URL que termina en /edit no funcionará aquí)
+            const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwaoQNDO-76s0c9cS7TfRceQNWE6frspFFXpo2oKWDxoYqtD74XT94ZkXOAs65knZsj/exec';
+
+            updateStatusIndicator('syncing');
+
+            const pedirRevisiones = fetch(`${APPS_SCRIPT_URL}?action=obtenerDatosRevisiones`)
+                .then(res => res.json());
+
+            const pedirErrores = fetch(`${APPS_SCRIPT_URL}?action=obtenerDatosErrores`)
+                .then(res => res.json());
+
+            Promise.all([pedirRevisiones, pedirErrores])
+                .then(async ([resRev, resErr]) => {
+                    let hayNuevosDatos = false;
+
+                    if (resRev && resRev.datos && !resRev.error) {
+                        datosRevisiones = resRev.datos;
+                        await guardarEnAlmacenamiento('revisiones', datosRevisiones);
+                        hayNuevosDatos = true;
+                    }
+                    if (resErr && resErr.datos && !resErr.error) {
+                        datosErrores = resErr.datos;
+                        await guardarEnAlmacenamiento('errores', datosErrores);
+                        hayNuevosDatos = true;
+                    }
+
+                    if(hayNuevosDatos) {
+                        lastSyncTime = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                        updateStatusIndicator('online');
+                        document.getElementById('offline-alert').style.display = 'none';
+                        
+                        procesarDatos(); 
+                        console.log('✅ Sincronización exitosa desde Google Sheets');
+                    }
+                })
+                .catch(err => {
+                    console.warn('⚠️ No se pudo sincronizar (sin red o servidor lento):', err);
+                    handleOffline();
+                });
+        }
+
+        // ==================== PROCESAMIENTO Y DIBUJO DE INTERFAZ ====================
+        function procesarDatos() {
+            calcularKPIsResumen();
+            generarGraficos();
+            actualizarPendientes();
+            procesarErrores();
+        }
+
+        function calcularKPIsResumen() {
+            let totalRevisiones = datosRevisiones.reduce((sum, r) => sum + (r.revisiones || 0), 0);
+            let aprobadas = datosRevisiones.filter(r => (r.estado || '').toLowerCase().trim() === 'aprobado').length;
+            let rechazadas = datosRevisiones.filter(r => (r.estado || '').toLowerCase().trim() === 'rechazado').length;
+            let proyectosUnicos = [...new Set(datosRevisiones.map(r => r.proyecto))].length;
+
+            document.getElementById('kpi-piezas').textContent = totalRevisiones.toLocaleString('es-ES');
+            document.getElementById('kpi-aprobadas').textContent = aprobadas.toLocaleString('es-ES');
+            document.getElementById('kpi-rechazadas').textContent = rechazadas.toLocaleString('es-ES');
+            document.getElementById('kpi-proyectos').textContent = proyectosUnicos.toLocaleString('es-ES');
+        }
+
+        function generarGraficos() {
+            let conteoProyectos = {};
+            datosRevisiones.forEach(r => {
+                const proyecto = r.proyecto || 'Sin Proyecto';
+                conteoProyectos[proyecto] = (conteoProyectos[proyecto] || 0) + 1;
+            });
+
+            const proyectosOrdenados = Object.keys(conteoProyectos).sort((a, b) => conteoProyectos[b] - conteoProyectos[a]);
+
+            const chartCanvas1 = document.getElementById('chart-piezas-proyecto');
+            if (window.chartInstance1) window.chartInstance1.destroy();
+            
+            window.chartInstance1 = new Chart(chartCanvas1, {
+                type: 'bar',
+                data: {
+                    labels: proyectosOrdenados,
+                    datasets: [{
+                        label: 'Piezas Revisadas',
+                        data: proyectosOrdenados.map(p => conteoProyectos[p]),
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: '#667eea',
+                        borderWidth: 2
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            let conteoEstados = {};
+            datosRevisiones.forEach(r => {
+                const estado = r.estado || 'Desconocido';
+                conteoEstados[estado] = (conteoEstados[estado] || 0) + 1;
+            });
+
+            const chartCanvas2 = document.getElementById('chart-estado-general');
+            if (window.chartInstance2) window.chartInstance2.destroy();
+            
+            window.chartInstance2 = new Chart(chartCanvas2, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(conteoEstados),
+                    datasets: [{
+                        data: Object.values(conteoEstados),
+                        backgroundColor: ['#667eea', '#764ba2', '#ff9800', '#f44336']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            let html = '<h5 class="mt-4 mb-3">Detalles por Proyecto</h5><div class="row">';
+            proyectosOrdenados.forEach(proyecto => {
+                const total = conteoProyectos[proyecto];
+                const aprobadas = datosRevisiones.filter(r => r.proyecto === proyecto && (r.estado || '').toLowerCase().trim() === 'aprobado').length;
+                const rechazadas = total - aprobadas;
+                const porcentaje = total > 0 ? Math.round((aprobadas / total) * 100) : 0;
+
+                html += `
+                    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                        <div class="project-card shadow-sm">
+                            <div class="card-header text-white">${proyecto}</div>
+                            <div class="card-body">
+                                <div class="row text-center">
+                                    <div class="col-6 border-right-light">
+                                        <div class="project-stat"><h4>${total}</h4><small>Total</small></div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="project-stat"><h4 class="text-success">${porcentaje}%</h4><small>Aprobado</small></div>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <small class="text-success">✓ ${aprobadas} aprobadas</small><br>
+                                    <small class="text-danger">✗ ${rechazadas} rechazadas</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            html += '</div>';
+            document.getElementById('proyecto-details').innerHTML = html;
+        }
+
+        function aplicarFiltrosBusqueda() {
+            const fecha = document.getElementById('filter-fecha').value;
+            const proyecto = document.getElementById('filter-proyecto-busqueda').value.toLowerCase();
+            const marca = document.getElementById('filter-marca').value.toLowerCase();
+            const area = document.getElementById('filter-area').value.toLowerCase();
+            const inspector = document.getElementById('filter-inspector').value.toLowerCase();
+            const estado = document.getElementById('filter-estado').value.toLowerCase();
+
+            const resultados = datosRevisiones.filter(r => {
+                return (!fecha || r.fecha === fecha) &&
+                       (!proyecto || (r.proyecto || '').toLowerCase().includes(proyecto)) &&
+                       (!marca || (r.elemento || '').toLowerCase().includes(marca)) &&
+                       (!area || (r.area || '').toLowerCase().includes(area)) &&
+                       (!inspector || (r.inspector || '').toLowerCase().includes(inspector)) &&
+                       (!estado || (r.estado || '').toLowerCase().includes(estado));
+            });
+
+            let html = `<h5 class="mb-3">Resultados (${resultados.length} registros)</h5>`;
+            if (resultados.length === 0) {
+                html += '<div class="alert alert-info">No hay registros que coincidan con los filtros</div>';
+            } else {
+                html += '<div class="table-responsive"><table class="table"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Marca</th><th>Area</th><th>Inspector</th><th>Estado</th></tr></thead><tbody>';
+                resultados.forEach(r => {
+                    html += `<tr><td>${r.fecha || '-'}</td><td>${r.proyecto || '-'}</td><td>${r.elemento || '-'}</td><td>${r.area || '-'}</td><td>${r.inspector || '-'}</td><td><span class="badge bg-primary">${r.estado || '-'}</span></td></tr>`;
+                });
+                html += '</tbody></table></div>';
+            }
+            document.getElementById('busqueda-resultados').innerHTML = html;
+        }
+
+        function actualizarPendientes() {
+            const containerRechazados = document.getElementById('pendientes-rechazados-container');
+            const containerAvances = document.getElementById('pendientes-avances-container');
+            
+            const rechazados = datosRevisiones.filter(r => (r.estado || '').toLowerCase().trim() === 'rechazado' && (r.reparado || '').toLowerCase().trim() === 'no');
+            const avancesAprobados = datosRevisiones.filter(r => (r.estado || '').toLowerCase().trim() === 'avance aprobado' && (r.reparado || '').toLowerCase().trim() === 'no');
+
+            document.getElementById('kpi-pendientes-rechazados').textContent = rechazados.length;
+            document.getElementById('kpi-pendientes-avances').textContent = avancesAprobados.length;
+
+            containerRechazados.innerHTML = generarTablaPendientesHTML(rechazados, '<i class="fas fa-times-circle"></i> Tabla de Rechazados Pendientes', 'bg-danger');
+            containerAvances.innerHTML = generarTablaPendientesHTML(avancesAprobados, '<i class="fas fa-exclamation-triangle"></i> Tabla de Avance Aprobado Pendientes', 'bg-warning text-dark');
+        }
+
+        function generarTablaPendientesHTML(datos, titulo, badgeClass) {
+            if (datos.length === 0) {
+                return `<h5 class="mt-4 mb-3">${titulo}</h5><div class="alert alert-success border-0 shadow-sm">¡No hay registros en esta categoría!</div>`;
+            }
+            
+            let html = `<h5 class="mt-4 mb-3">${titulo} <span class="badge ${badgeClass} ms-2 rounded-pill">${datos.length}</span></h5>
+                <div class="table-responsive bg-white rounded shadow-sm border">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr class="table-light">
+                                <th>Fecha</th><th>Proyecto</th><th>Marca</th><th>Correlativo</th><th>Área</th><th>Responsable</th><th>Detalle del Error</th>
+                            </tr>
+                        </thead><tbody>`;
+            
+            datos.forEach(r => {
+                html += `<tr>
+                    <td>${r.fecha || '-'}</td>
+                    <td class="fw-bold">${r.proyecto || '-'}</td>
+                    <td>${r.elemento || '-'}</td>
+                    <td>${r.correlativo || '-'}</td>
+                    <td>${r.area || '-'}</td>
+                    <td>${r.responsable || '-'}</td>
+                    <td>${r.detalles || '-'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            return html;
+        }
+
+        function procesarErrores() {
+            const container = document.getElementById('errores-tabla');
+            if (datosErrores.length === 0) {
+                container.innerHTML = '<p>No hay datos de errores registrados.</p>';
+                return;
+            }
+
+            let conteoAreas = {};
+            let totalErrores = datosErrores.length;
+            let cantReparados = 0;
+
+            datosErrores.forEach(r => {
+                const area = r.areaResponsable || 'Desconocida';
+                conteoAreas[area] = (conteoAreas[area] || 0) + 1;
+                
+                const estadoRep = (r.estadoReparado || '').toLowerCase().trim();
+                if (estadoRep.includes('reparad') && !estadoRep.includes('no')) {
+                    cantReparados++;
+                }
+            });
+
+            const areas = Object.keys(conteoAreas);
+            const areaTop = areas.length > 0 ? areas.reduce((a, b) => conteoAreas[a] > conteoAreas[b] ? a : b) : "-";
+
+            let pctReparados = totalErrores > 0 ? Math.round((cantReparados / totalErrores) * 100) : 0;
+            let pctPorReparar = 100 - pctReparados;
+
+            document.getElementById('kpi-area-top').textContent = areaTop;
+            document.getElementById('kpi-pct-reparados').textContent = pctReparados + '%';
+            document.getElementById('kpi-pct-por-reparar').textContent = pctPorReparar + '%';
+
+            let html = `<h5 class="mt-4 mb-3">Detalle de Errores en Terreno</h5>
+                        <div class="table-responsive bg-white rounded shadow-sm"><table class="table mb-0">
+                        <thead><tr>
+                            <th>Proyecto</th><th>Fecha</th><th>Fase/Marca</th><th>Área Responsable</th><th>Detalle de error</th><th>Estado Reparado</th>
+                        </tr></thead><tbody>`;
+            
+            datosErrores.forEach(r => {
+                const estadoLimpio = (r.estadoReparado || '').toLowerCase();
+                const badgeColor = (estadoLimpio.includes('reparad') && !estadoLimpio.includes('no')) 
+                                    ? 'text-success fw-bold' 
+                                    : 'text-danger fw-bold';
+                
+                html += `<tr>
+                    <td>${r.proyecto || '-'}</td>
+                    <td>${r.fecha || '-'}</td>
+                    <td>${r.elemento || '-'}</td>
+                    <td><span class="badge bg-secondary">${r.areaResponsable || '-'}</span></td>
+                    <td>${r.detalle || '-'}</td>
+                    <td class="${badgeColor}">${r.estadoReparado || '-'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
