@@ -233,6 +233,7 @@
                         <div class="col-md-2"><label class="form-label fw-bold">Marca</label><input type="text" id="filter-marca" class="form-control" placeholder="Buscar..."></div>
                         <div class="col-md-2"><label class="form-label fw-bold">Área</label><input type="text" id="filter-area" class="form-control" placeholder="Buscar..."></div>
                         <div class="col-md-2"><label class="form-label fw-bold">Inspector</label><input type="text" id="filter-inspector" class="form-control" placeholder="Buscar..."></div>
+                        <div class="col-md-2"><label class="form-label fw-bold">Etapa/Armador/Soldador</label><input type="text" id="filter-responsable" class="form-control" placeholder="Buscar..."></div>
                         <div class="col-md-2">
                             <label class="form-label fw-bold">Estado</label>
                             <select id="filter-estado" class="form-select">
@@ -494,9 +495,17 @@
         }
 
         function calcularKPIsResumen() {
+            // Suma la Columna D (revisiones) para el total general
             let totalRevisiones = datosRevisiones.reduce((sum, r) => sum + (r.revisiones || 0), 0);
-            let aprobadas = datosRevisiones.filter(r => (r.estado || '').toLowerCase().trim() === 'aprobado').length;
-            let rechazadas = datosRevisiones.filter(r => (r.estado || '').toLowerCase().trim() === 'rechazado').length;
+            
+            // Aprobadas y Rechazadas: SUMA de la Columna D (cantidad), filtrado por Columna L (estado)
+            // (antes contaba filas con .length, ahora suma la cantidad real de piezas)
+            let aprobadas = datosRevisiones
+                .filter(r => (r.estado || '').toLowerCase().trim() === 'aprobado')
+                .reduce((sum, r) => sum + (r.revisiones || 0), 0);
+            let rechazadas = datosRevisiones
+                .filter(r => (r.estado || '').toLowerCase().trim() === 'rechazado')
+                .reduce((sum, r) => sum + (r.revisiones || 0), 0);
             let proyectosUnicos = [...new Set(datosRevisiones.map(r => r.proyecto))].length;
 
             document.getElementById('kpi-piezas').textContent = totalRevisiones.toLocaleString('es-ES');
@@ -506,10 +515,11 @@
         }
 
         function generarGraficos() {
+            // Suma la Columna D (revisiones) por proyecto, no cuenta filas
             let conteoProyectos = {};
             datosRevisiones.forEach(r => {
                 const proyecto = r.proyecto || 'Sin Proyecto';
-                conteoProyectos[proyecto] = (conteoProyectos[proyecto] || 0) + 1;
+                conteoProyectos[proyecto] = (conteoProyectos[proyecto] || 0) + (r.revisiones || 0);
             });
 
             const proyectosOrdenados = Object.keys(conteoProyectos).sort((a, b) => conteoProyectos[b] - conteoProyectos[a]);
@@ -532,10 +542,11 @@
                 options: { responsive: true, maintainAspectRatio: false }
             });
 
+            // Suma la Columna D (revisiones) agrupada por estado, no cuenta filas
             let conteoEstados = {};
             datosRevisiones.forEach(r => {
                 const estado = r.estado || 'Desconocido';
-                conteoEstados[estado] = (conteoEstados[estado] || 0) + 1;
+                conteoEstados[estado] = (conteoEstados[estado] || 0) + (r.revisiones || 0);
             });
 
             const chartCanvas2 = document.getElementById('chart-estado-general');
@@ -555,9 +566,13 @@
 
             let html = '<h5 class="mt-4 mb-3">Detalles por Proyecto</h5><div class="row">';
             proyectosOrdenados.forEach(proyecto => {
-                const total = conteoProyectos[proyecto];
-                const aprobadas = datosRevisiones.filter(r => r.proyecto === proyecto && (r.estado || '').toLowerCase().trim() === 'aprobado').length;
-                const rechazadas = total - aprobadas;
+                const total = conteoProyectos[proyecto]; // Ya es suma de Columna D
+                const aprobadas = datosRevisiones
+                    .filter(r => r.proyecto === proyecto && (r.estado || '').toLowerCase().trim() === 'aprobado')
+                    .reduce((sum, r) => sum + (r.revisiones || 0), 0);
+                const rechazadas = datosRevisiones
+                    .filter(r => r.proyecto === proyecto && (r.estado || '').toLowerCase().trim() === 'rechazado')
+                    .reduce((sum, r) => sum + (r.revisiones || 0), 0);
                 const porcentaje = total > 0 ? Math.round((aprobadas / total) * 100) : 0;
 
                 html += `
@@ -591,6 +606,7 @@
             const marca = document.getElementById('filter-marca').value.toLowerCase();
             const area = document.getElementById('filter-area').value.toLowerCase();
             const inspector = document.getElementById('filter-inspector').value.toLowerCase();
+            const responsable = document.getElementById('filter-responsable').value.toLowerCase();
             const estado = document.getElementById('filter-estado').value.toLowerCase();
 
             const resultados = datosRevisiones.filter(r => {
@@ -599,6 +615,7 @@
                        (!marca || (r.elemento || '').toLowerCase().includes(marca)) &&
                        (!area || (r.area || '').toLowerCase().includes(area)) &&
                        (!inspector || (r.inspector || '').toLowerCase().includes(inspector)) &&
+                       (!responsable || (r.responsable || '').toLowerCase().includes(responsable)) &&
                        (!estado || (r.estado || '').toLowerCase().includes(estado));
             });
 
@@ -606,9 +623,9 @@
             if (resultados.length === 0) {
                 html += '<div class="alert alert-info">No hay registros que coincidan con los filtros</div>';
             } else {
-                html += '<div class="table-responsive"><table class="table"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Marca</th><th>Area</th><th>Inspector</th><th>Estado</th></tr></thead><tbody>';
+                html += '<div class="table-responsive"><table class="table"><thead><tr><th>Fecha</th><th>Proyecto</th><th>Marca</th><th>Correlativo</th><th>Cantidad</th><th>Area</th><th>Etapa/Armador/Soldador</th><th>Inspector</th><th>Estado</th></tr></thead><tbody>';
                 resultados.forEach(r => {
-                    html += `<tr><td>${r.fecha || '-'}</td><td>${r.proyecto || '-'}</td><td>${r.elemento || '-'}</td><td>${r.area || '-'}</td><td>${r.inspector || '-'}</td><td><span class="badge bg-primary">${r.estado || '-'}</span></td></tr>`;
+                    html += `<tr><td>${r.fecha || '-'}</td><td>${r.proyecto || '-'}</td><td>${r.elemento || '-'}</td><td>${r.correlativo || '-'}</td><td>${r.revisiones || 0}</td><td>${r.area || '-'}</td><td>${r.responsable || '-'}</td><td>${r.inspector || '-'}</td><td><span class="badge bg-primary">${r.estado || '-'}</span></td></tr>`;
                 });
                 html += '</tbody></table></div>';
             }
